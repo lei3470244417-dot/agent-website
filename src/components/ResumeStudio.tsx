@@ -4,6 +4,7 @@ import {
   readResumeFile,
   type ParsedResumeFile,
 } from "../lib/readResumeFile";
+import { uploadResumeForOptimization } from "../lib/resumeOptimizeClient";
 
 type Props = {
   resume: string;
@@ -46,16 +47,51 @@ export function ResumeStudio({
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileBusy, setFileBusy] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [workflowError, setWorkflowError] = useState("");
+  const [workflowMessage, setWorkflowMessage] = useState("");
+  const [workflowEvaluation, setWorkflowEvaluation] = useState("");
+
+  const formatEvaluation = (value: unknown): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  };
 
   const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
     setFileError("");
+    setWorkflowError("");
+    setWorkflowMessage("");
+    setWorkflowEvaluation("");
     setFileBusy(true);
     try {
       const parsed = await readResumeFile(f);
       onImportResume(parsed);
+      setWorkflowBusy(true);
+      try {
+        const result = await uploadResumeForOptimization(f, "resume_optimize");
+        const normalized = result.normalized;
+        if (normalized?.resumeText?.trim()) {
+          onResumeChange(normalized.resumeText.trim());
+        }
+        setWorkflowMessage(
+          normalized?.assistantReply?.trim() ||
+            result.message ||
+            "工作流已触发，请在智能体平台查看处理进度。"
+        );
+        setWorkflowEvaluation(formatEvaluation(normalized?.evaluation));
+      } catch (err) {
+        setWorkflowError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setWorkflowBusy(false);
+      }
     } catch (err) {
       setFileError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -82,11 +118,11 @@ export function ResumeStudio({
           />
           <button
             type="button"
-            disabled={fileBusy}
+            disabled={fileBusy || workflowBusy}
             onClick={() => fileRef.current?.click()}
             className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent-glow transition hover:bg-accent/20 disabled:opacity-50"
           >
-            {fileBusy ? "读取中…" : "上传简历"}
+            {fileBusy ? "读取中…" : workflowBusy ? "上传并触发中…" : "上传简历"}
           </button>
           <button
             type="button"
@@ -102,6 +138,25 @@ export function ResumeStudio({
         <p className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-300">
           {fileError}
         </p>
+      ) : null}
+      {workflowError ? (
+        <p className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-200">
+          工作流触发失败：{workflowError}
+        </p>
+      ) : null}
+      {workflowMessage ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-xs text-emerald-100">
+          <p className="font-medium">智能体返回</p>
+          <p className="mt-1 whitespace-pre-wrap">{workflowMessage}</p>
+        </div>
+      ) : null}
+      {workflowEvaluation ? (
+        <div className="rounded-2xl border border-white/10 bg-ink-950/50 px-4 py-3">
+          <p className="text-xs font-medium text-ink-200">简历评价</p>
+          <pre className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink-300">
+            {workflowEvaluation}
+          </pre>
+        </div>
       ) : null}
 
       <div className="grid gap-4 rounded-2xl border border-white/10 bg-surface shadow-glass md:grid-cols-2 md:divide-x md:divide-white/10">
