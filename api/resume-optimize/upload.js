@@ -110,9 +110,9 @@ function normalizeWorkflowResult(workflowResponse) {
   return { assistantReply, resumeText, evaluation };
 }
 
-async function getStorageCredential(client, botBizId, fileType, typeKey = "realtime") {
+async function getStorageCredential(client, appId, fileType, typeKey = "realtime") {
   const params = {
-    BotBizId: botBizId,
+    BotBizId: appId,
     FileType: fileType,
     IsPublic: false,
     TypeKey: typeKey,
@@ -136,9 +136,9 @@ async function uploadToCos(credential, fileBuffer) {
   return { uploadPath: UploadPath, bucket: Bucket, region: Region };
 }
 
-async function saveDoc(client, botBizId, fileName, fileType, uploadPath, fileSize, bucket, region) {
+async function saveDoc(client, appId, fileName, fileType, uploadPath, fileSize, bucket, region) {
   const params = {
-    BotBizId: botBizId,
+    BotBizId: appId,
     FileName: fileName,
     FileType: fileType,
     CosUrl: uploadPath,
@@ -180,11 +180,11 @@ export default async function handler(req, res) {
 
     const secretId = process.env.TENCENT_SECRET_ID;
     const secretKey = process.env.TENCENT_SECRET_KEY;
-    const botBizId = process.env.TENCENT_BOT_BIZ_ID;
+    const appId = process.env.TENCENT_APP_ID;
     const botAppKey = process.env.TENCENT_BOT_APP_KEY;
     const tencentRegion = process.env.TENCENT_REGION || "ap-guangzhou";
 
-    if (!secretId || !secretKey || !botBizId || !botAppKey) {
+    if (!secretId || !secretKey || !appId || !botAppKey) {
       return res.status(500).json({ error: "服务器环境变量未配置完整" });
     }
 
@@ -203,11 +203,11 @@ export default async function handler(req, res) {
       profile: { httpProfile: { endpoint: "lke.tencentcloudapi.com" } },
     });
 
-    const credential = await getStorageCredential(client, botBizId, fileType, "realtime");
+    const credential = await getStorageCredential(client, appId, fileType, "realtime");
     const uploadResult = await uploadToCos(credential, fileBuffer);
     const docBizId = await saveDoc(
       client,
-      botBizId,
+      appId,
       fileName,
       fileType,
       uploadResult.uploadPath,
