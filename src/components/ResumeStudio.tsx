@@ -76,13 +76,14 @@ export function ResumeStudio({
       onImportResume(parsed);
       setWorkflowBusy(true);
       try {
-        const result = await uploadResumeForOptimization(f, "resume_optimize");
+        const result = await uploadResumeForOptimization(parsed, "resume_optimize");
         const normalized = result.normalized;
         if (normalized?.resumeText?.trim()) {
           onResumeChange(normalized.resumeText.trim());
         }
         setWorkflowMessage(
           normalized?.assistantReply?.trim() ||
+            (typeof result.reply === "string" && result.reply.trim()) ||
             result.message ||
             "工作流已触发，请在智能体平台查看处理进度。"
         );

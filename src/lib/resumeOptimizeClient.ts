@@ -1,13 +1,30 @@
+import type { ParsedResumeFile } from "./readResumeFile";
+
 export type ResumeOptimizeResult = {
   message?: string;
-  docBizId?: string;
-  workflowResult?: unknown;
+  reply?: string;
   normalized?: {
     assistantReply?: string;
     resumeText?: string;
     evaluation?: unknown;
   };
 };
+
+const VISITOR_STORAGE_KEY = "career-hub-visitor-biz-id";
+
+function getOrCreateVisitorId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    let id = sessionStorage.getItem(VISITOR_STORAGE_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem(VISITOR_STORAGE_KEY, id);
+    }
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
 
 function toErrorMessage(raw: unknown, fallback: string): string {
   if (typeof raw === "string" && raw.trim()) return raw;
@@ -19,18 +36,21 @@ function toErrorMessage(raw: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * 将已解析的简历正文提交到服务端，经腾讯云 HTTP SSE 对话接口触发工作流。
+ */
 export async function uploadResumeForOptimization(
-  file: File,
-  workflow = "resume_optimize"
+  parsed: ParsedResumeFile,
+  workflow = "resume_optimize",
 ): Promise<ResumeOptimizeResult> {
   const resp = await fetch("/api/resume-optimize/upload", {
     method: "POST",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-      "X-File-Name": encodeURIComponent(file.name || "resume.pdf"),
-      "X-Workflow": workflow,
-    },
-    body: file,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      resumeText: parsed.text,
+      visitorId: getOrCreateVisitorId(),
+      workflow,
+    }),
   });
 
   let payload: unknown = null;
@@ -41,7 +61,7 @@ export async function uploadResumeForOptimization(
   }
 
   if (!resp.ok) {
-    throw new Error(toErrorMessage(payload, "上传失败，请稍后重试。"));
+    throw new Error(toErrorMessage(payload, "请求失败，请稍后重试。"));
   }
 
   if (!payload || typeof payload !== "object") {
